@@ -1,63 +1,25 @@
-# Hand Window Dragger (v1)
+# Hand Window Dragger
 
-Iron-Man-style window control: grab the focused window with a fist gesture
-in front of your webcam, move your hand across the frame, open your hand
-to drop the window onto the corresponding monitor.
+Iron-Man-style window control: grab the focused window with a fist
+gesture in front of your webcam, move your hand across the frame, open
+your hand to drop the window onto the corresponding monitor. Built on
+[MediaPipe HandLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
+(Google, open source), OpenCV, and pywin32. Windows only.
 
-Built on [MediaPipe HandLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
-(Google, open source) for hand tracking, OpenCV for camera capture, and
-pywin32 for window placement. Windows only.
+Four versions live side by side here as independent, runnable folders --
+each is a complete, standalone app (own `requirements.txt`, own
+`launch_gui.pyw`), not a diff against another version.
 
-## Requirements
+| Folder | What it is |
+|---|---|
+| [`v1/`](v1) | The original: fist grab/drop across monitors, Tkinter GUI + CLI. |
+| [`v2/`](v2) | Adds the guided calibration tutorial, a real Quit control, and recordable custom gestures. |
+| [`v3/`](v3) | **Recommended for reliability.** Adds zone-based grabbing (grab whatever's on your hand's monitor), face-recognition security, keyboard/mouse custom-gesture actions, a resizable/scrollable window, and several tracking/drop-accuracy fixes. No animations. |
+| [`v4/`](v4) | Same as v3, plus optional drag animations (glow+swish or crushed-paper), off by default. |
 
-- Windows with a webcam
-- Python 3.10+
-- `pip install -r requirements.txt`
+v3 and v4 share the same tracking and drop-accuracy fixes -- v4 is
+strictly v3 plus a cosmetic animation layer, not a different tracking
+implementation. If v4's animations ever regress accuracy again, v3 is
+the fallback with identical grab/drop behavior.
 
-## Run it
-
-**GUI (recommended):** double-click `launch_gui.pyw`, or run
-
-```
-pythonw launch_gui.pyw
-```
-
-The control panel has Start/Stop, a live preview with gesture overlay,
-sensitivity sliders, mirror/maximize toggles, a camera picker, and an
-activity log. Settings persist to `config.json`.
-
-**CLI:**
-
-```
-python main.py
-```
-
-Controls: `q` quit, `m` toggle mirror, `x` toggle maximize-on-drop,
-`c` cycle camera, `s` save config.
-
-## How it works
-
-1. `engine.py` runs the camera + MediaPipe loop on a background thread and
-   reports frames/events via callbacks — both `main.py` (CLI) and
-   `gui_app.py` (GUI) drive the same engine.
-2. `gestures.py` detects a rotation-invariant "fist" (grab) from the 21
-   hand landmarks MediaPipe returns per frame.
-3. On grab, the engine captures whichever window was last focused
-   (`window_manager.py`, via `pywin32`) — not its own preview window.
-4. While held, your hand's horizontal position selects a monitor zone
-   (left/center/right, mapped to your actual monitor layout via
-   `EnumDisplayMonitors`).
-5. On release, the window is moved (and optionally maximized) onto that
-   monitor.
-
-## Files
-
-- `engine.py` — UI-agnostic tracking/gesture/window-move engine (threaded)
-- `gestures.py` — landmark-based gesture classification
-- `window_manager.py` — monitor enumeration + window placement (Win32)
-- `overlay.py` — shared camera-frame annotation (landmarks, zone highlight)
-- `config_io.py` — settings persistence
-- `gui_app.py` / `launch_gui.pyw` — Tkinter control panel
-- `main.py` — CLI front end
-- `models/hand_landmarker.task` — Google's official open-source hand
-  landmark model (Apache 2.0)
+Pick a folder and follow its own README for setup and details.
