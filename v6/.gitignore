@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+config.json
+calibration.json
+gesture_templates.json
+zone_profile.json
+face_data/
+*.log
