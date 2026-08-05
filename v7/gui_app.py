@@ -60,6 +60,7 @@ class App:
         self._ball_smooth_pos = None
         self._last_highlight_zone = None
         self._highlight_hwnd = None
+        self._blackout_win = None
 
         self.engine = HandDraggerEngine(config=self.cfg, on_frame=self._on_frame, on_event=self._on_event)
 
@@ -345,6 +346,7 @@ class App:
         if self._drag_overlay:
             self._drag_overlay.destroy()
             self._drag_overlay = None
+        self._hide_blackout()
         save_config(self.cfg)
         self.root.destroy()
 
@@ -523,6 +525,7 @@ class App:
             self.start_btn.configure(text="Start Tracking")
             self.status_var.set("Stopped")
             self.hold_var.set("")
+            self._hide_blackout()  # never leave the screen stuck black after tracking stops
 
         try:
             while True:
@@ -531,6 +534,10 @@ class App:
                 self.status_var.set(info["state"])
                 self.hold_var.set(f"Holding: {info['grabbed_title']}" if info["grabbed_title"] else "")
                 self._update_drag_overlay(info)
+                if info.get("display_off") and self._blackout_win is None:
+                    self._show_blackout()
+                elif not info.get("display_off") and self._blackout_win is not None:
+                    self._hide_blackout()
                 if info.get("greeting_pending") and info.get("greeting_name"):
                     self._show_greeting(info["greeting_name"])
         except queue.Empty:
@@ -549,6 +556,36 @@ class App:
         vb = virtual_desktop_bounds(self.engine.monitors)
         cx, cy = (vb[0] + vb[2]) / 2, (vb[1] + vb[3]) / 2
         JarvisGreeting(self.root, cx, cy, name)
+
+    def _show_blackout(self):
+        """Cover every monitor with an ordinary opaque black window to
+        simulate "display off" -- deliberately NOT a real
+        WM_SYSCOMMAND/SC_MONITORPOWER call. Actually powering off the
+        physical monitor is itself what makes Windows apply its
+        "require sign-in" policy the instant display power changes,
+        regardless of any idle-timer suppression, which is what was
+        locking the session out from under this feature. A plain black
+        window never touches real monitor power state, so that policy
+        never fires."""
+        if self._blackout_win is not None:
+            return
+        vb = virtual_desktop_bounds(self.engine.monitors)
+        x, y, x2, y2 = vb
+        w, h = max(1, int(x2 - x)), max(1, int(y2 - y))
+        win = tk.Toplevel(self.root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg="black")
+        win.geometry(f"{w}x{h}+{int(x)}+{int(y)}")
+        self._blackout_win = win
+
+    def _hide_blackout(self):
+        if self._blackout_win is not None:
+            try:
+                self._blackout_win.destroy()
+            except tk.TclError:
+                pass
+            self._blackout_win = None
 
     def _any_animation_active(self):
         return (self.cfg["follow_style"] != "none" or self.cfg["highlight_target_enabled"]

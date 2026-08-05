@@ -12,26 +12,29 @@ _ES_SYSTEM_REQUIRED = 0x00000001
 
 
 def prevent_system_idle_lock(prevent):
-    """Stop Windows' own inactivity timer from sleeping/locking the
-    session while we're managing presence-based display power ourselves.
+    """Stop Windows' own power-idle timer from putting the system to sleep
+    while we're managing presence-based "display off" ourselves in
+    software (see drag_overlay-style blackout overlay in gui_app.py).
 
-    Without this, Windows' own idle timeout can independently trigger
-    "require sign-in" on the next screen wake -- including the wake WE
-    cause by calling set_monitor_power(True) -- so the user comes back,
-    the display turns on, and they're staring at the Windows lock screen
-    instead of their desktop. Worse, while the session is locked, Windows
-    blocks camera access for background apps, so the face-detection loop
-    that's supposed to notice they're back never gets a frame, and
-    set_monitor_power(True) never even fires -- it looks like the
-    feature just doesn't work.
+    NOTE: the actual physical monitor is never turned off by this app --
+    an earlier version used the WM_SYSCOMMAND/SC_MONITORPOWER broadcast to
+    do that, but on Windows, actually powering off the display is itself
+    what makes Winlogon apply the "require sign-in" policy (Settings >
+    Accounts > Sign-in options), independent of any idle timer. Neither
+    this function nor simulate_trivial_input() below can prevent that,
+    because it isn't idle-driven at all -- it fires the instant the
+    display power state changes. So the display is instead blanked with
+    an ordinary opaque black window, which never changes real monitor
+    power state and never triggers that policy.
 
-    Deliberately does NOT pass ES_DISPLAY_REQUIRED: that would force the
-    display to always stay on and defeat the point. This only tells
-    Windows "don't treat this as system-idle," so its own separate
-    sleep/lock timer never fires; set_monitor_power() remains the only
-    thing that blanks the screen. Reversible, no admin rights, no system
-    settings touched -- must be called with prevent=False when this
-    feature is disabled or the engine stops, to restore normal behavior.
+    This function still matters for a narrower reason: while the user is
+    away with the screen blanked, we don't want the *system* to actually
+    fall asleep (which would kill camera access and the face-detection
+    loop that's supposed to notice they're back). Deliberately does NOT
+    pass ES_DISPLAY_REQUIRED -- that would force a real monitor to power
+    on, which we don't want either. Reversible, no admin rights, no
+    system settings touched -- must be called with prevent=False when
+    this feature is disabled or the engine stops.
     """
     flags = _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED if prevent else _ES_CONTINUOUS
     ctypes.windll.kernel32.SetThreadExecutionState(flags)
@@ -51,28 +54,6 @@ def simulate_trivial_input():
     resets that timer without actually moving the cursor.
     """
     win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 0, 0, 0, 0)
-
-
-def set_monitor_power(on):
-    """Turn the display(s) on or off -- not lock, not system sleep -- via
-    the standard WM_SYSCOMMAND/SC_MONITORPOWER broadcast. The camera and
-    this app keep running underneath; only the physical display power
-    state changes.
-
-    Uses SendMessageTimeout (not plain SendMessage): a broadcast to
-    HWND_BROADCAST blocks waiting for every top-level window to process
-    it, and one unresponsive window can hang the caller indefinitely --
-    a bounded timeout with SMTO_ABORTIFHUNG keeps this from ever
-    stalling the engine loop.
-    """
-    value = -1 if on else 2  # -1 = on, 2 = off (1 = low-power, unused here)
-    try:
-        win32gui.SendMessageTimeout(
-            win32con.HWND_BROADCAST, win32con.WM_SYSCOMMAND, win32con.SC_MONITORPOWER, value,
-            win32con.SMTO_ABORTIFHUNG, 1000,
-        )
-    except win32gui.error:
-        pass
 
 
 def get_monitors_sorted():

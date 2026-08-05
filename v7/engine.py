@@ -31,7 +31,6 @@ from window_manager import (
     monitor_index_for_window,
     move_window_to_monitor,
     prevent_system_idle_lock,
-    set_monitor_power,
     simulate_trivial_input,
 )
 from zone_calibration import USAGE_LEARNING_RATE, load_profile, save_profile, update_center, zone_for_x
@@ -239,14 +238,25 @@ class HandDraggerEngine:
                             if name:
                                 face_seen_last_ts = now
                                 if display_off:
-                                    set_monitor_power(True)
+                                    # Actually revealing the screen (destroying
+                                    # the blackout overlay) happens on the GUI
+                                    # main thread -- see gui_app.py's _poll,
+                                    # driven by the "display_off" flag below.
                                     display_off = False
                                     self._log(f"Welcome back, {name} -- display on.")
                                     if cfg["presence_greeting_enabled"]:
                                         greeting_pending = True
                                         greeting_name = name
                             elif not display_off and (now - face_seen_last_ts) > cfg["presence_absence_seconds"]:
-                                set_monitor_power(False)
+                                # Blanking the screen is a software overlay
+                                # (see BlackoutOverlay in gui_app.py), not a
+                                # real WM_SYSCOMMAND/SC_MONITORPOWER call --
+                                # actually powering off the physical monitor
+                                # is itself what makes Windows apply its
+                                # "require sign-in" policy the instant the
+                                # display power state changes, independent of
+                                # any idle timer, which is what was locking
+                                # the session out from under this feature.
                                 display_off = True
                                 self._log("No one detected -- display off.")
                 else:
@@ -469,14 +479,16 @@ class HandDraggerEngine:
                         "zone_centers": self._zone_centers,
                         "greeting_pending": greeting_pending,
                         "greeting_name": greeting_name,
+                        "display_off": display_off,
                     }
                     self.on_frame(frame, info)
                 else:
                     time.sleep(0.001)
 
         finally:
-            if display_off:
-                set_monitor_power(True)  # don't leave the screen blank after tracking stops
+            # display_off itself is just a flag; the actual blackout overlay
+            # (if any) is a GUI-thread window torn down in gui_app.py when it
+            # sees engine.running go False, not something to clean up here.
             if idle_lock_suppressed:
                 prevent_system_idle_lock(False)  # restore normal Windows idle/lock behavior
             cap.release()
