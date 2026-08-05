@@ -27,6 +27,7 @@ from face_ui import FaceEnrollWindow, ask_person_name
 from gesture_templates import load_templates, save_templates
 from gesture_ui import AddGestureDialog
 from greeting import JarvisGreeting
+from greeting_ui import GreetingSettingsDialog
 from overlay import draw_landmarks, draw_overlay
 from pattern_learning import generate_report
 from window_manager import get_topmost_window_on_monitor, virtual_desktop_bounds
@@ -230,6 +231,8 @@ class App:
         ttk.Checkbutton(main, text="Show a greeting when the display turns back on",
                          variable=self.presence_greeting_var, command=self._apply_checks).grid(
             row=r, column=col, sticky="w"); r += 1
+        ttk.Button(main, text="Customize Greeting...", command=self.open_greeting_settings).grid(
+            row=r, column=col, sticky="ew", pady=(0, 4)); r += 1
         r = self._add_slider(main, r, col, "Away threshold (seconds)", "presence_absence_seconds", 5, 120)
 
         ttk.Separator(main, orient="horizontal").grid(row=r, column=col, sticky="ew", pady=6); r += 1
@@ -555,7 +558,19 @@ class App:
     def _show_greeting(self, name):
         vb = virtual_desktop_bounds(self.engine.monitors)
         cx, cy = (vb[0] + vb[2]) / 2, (vb[1] + vb[3]) / 2
-        JarvisGreeting(self.root, cx, cy, name)
+        JarvisGreeting(self.root, cx, cy, name, self.cfg)
+
+    def open_greeting_settings(self):
+        if self._modal_open:
+            return
+        self._modal_open = True
+        dialog = GreetingSettingsDialog(self.root, self.cfg, on_saved=self._on_greeting_settings_saved)
+        self.root.wait_window(dialog)
+        self._modal_open = False
+
+    def _on_greeting_settings_saved(self):
+        save_config(self.cfg)
+        self._append_log("Greeting settings saved.")
 
     def _show_blackout(self):
         """Cover every monitor with an ordinary opaque black window to

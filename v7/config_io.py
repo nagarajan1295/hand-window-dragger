@@ -36,6 +36,14 @@ DEFAULT_CONFIG = {
     "presence_display_control_enabled": False,
     "presence_greeting_enabled": False,
     "presence_absence_seconds": 20,
+    # Greeting customization -- see greeting.py / greeting_ui.py.
+    "greeting_text": "Hi {name}",             # {name} is replaced with the recognized person's name
+    "greeting_font": "Claude-style (Segoe UI Semilight)",
+    "greeting_text_color": "#eee7dd",
+    "greeting_bg_shape": "glow_orb",          # "glow_orb" | "rounded_rect" | "rectangle" | "none"
+    "greeting_bg_color": "#a85c42",
+    "greeting_use_custom_image": False,       # show an uploaded image instead of text
+    "greeting_image_path": "",
     # Reduce false-positive gestures.
     "require_face_for_gestures": False,   # a face must be detected for any gesture to register
     "suppress_hand_near_face": False,     # ignore hand poses that overlap the detected face (scratching, etc.)
