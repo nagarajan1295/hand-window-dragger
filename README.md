@@ -6,7 +6,7 @@ your hand to drop the window onto the corresponding monitor. Built on
 [MediaPipe HandLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
 (Google, open source), OpenCV, and pywin32. Windows only.
 
-Six versions live side by side here as independent, runnable folders --
+Seven versions live side by side here as independent, runnable folders --
 each is a complete, standalone app (own `requirements.txt`, own
 `launch_gui.pyw`), not a diff against another version.
 
@@ -17,9 +17,10 @@ each is a complete, standalone app (own `requirements.txt`, own
 | [`v3/`](v3) | Adds zone-based grabbing (grab whatever's on your hand's monitor), face-recognition security, keyboard/mouse custom-gesture actions, a resizable/scrollable window, and several tracking/drop-accuracy fixes. No animations. |
 | [`v4/`](v4) | Same as v3, plus optional drag animations (glow+swish or crushed-paper), off by default. |
 | [`v5/`](v5) | Same as v4, plus: reliable foreground/z-order on drop, no more color-fringe artifacts in the crushed-paper animation, distance-scaled animation smoothness, cursor-like ball-following, and a learned per-user hand-to-monitor mapping. |
-| [`v6/`](v6) | **Recommended.** Reworked animation system: "glow + swish" removed (didn't work), crushed-paper lost its crease-line texture (just the silhouette now), new **portal** follow-visual, plus independent combinable layers -- live HUD highlight of whatever window you're pointing at, a window-name label, and a particle trail. |
+| [`v6/`](v6) | Reworked animation system: "glow + swish" removed (didn't work), crushed-paper lost its crease-line texture (just the silhouette now), new **portal** follow-visual, plus independent combinable layers -- live HUD highlight of whatever window you're pointing at, a window-name label, and a particle trail. |
+| [`v7/`](v7) | **Recommended.** Presence-aware display power control (turns the monitor off/on based on your enrolled face, not lock/sleep) with a JARVIS-style greeting; two features to cut false-positive gestures (face-presence gating, hand-near-face suppression); and pattern learning -- a small incrementally-trained neural network that learns your drag/drop habits and surfaces suggestions (never auto-acts), plus a local usage-report generator. |
 
-v3 through v6 share the same tracking foundation -- each is strictly the
+v3 through v7 share the same tracking foundation -- each is strictly the
 previous one plus fixes/features, not a different implementation. If a
 later version ever regresses something, an earlier one is always there
 as a fallback with the older, known-good behavior for that layer.

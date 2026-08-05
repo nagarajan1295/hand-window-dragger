@@ -1,0 +1,6 @@
+opencv-contrib-python
+numpy
+mediapipe
+pywin32
+scikit-learn
+joblib
