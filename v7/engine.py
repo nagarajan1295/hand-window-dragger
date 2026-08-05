@@ -30,6 +30,7 @@ from window_manager import (
     is_real_window,
     monitor_index_for_window,
     move_window_to_monitor,
+    prevent_system_idle_lock,
     set_monitor_power,
 )
 from zone_calibration import USAGE_LEARNING_RATE, load_profile, save_profile, update_center, zone_for_x
@@ -176,6 +177,7 @@ class HandDraggerEngine:
         face_seen_last_ts = time.time()  # seed so display doesn't blank immediately at startup
         greeting_pending = False
         greeting_name = None
+        idle_lock_suppressed = False
 
         self._log(f"Started. {len(self.monitors)} monitor(s) detected.")
 
@@ -251,6 +253,16 @@ class HandDraggerEngine:
                     face_present = False
                     face_absent_checks = 0
                     last_face_rect = None
+
+                # Keep this in sync with the toggle every iteration (not
+                # just on face-check ticks) so it reacts immediately if
+                # the setting changes mid-run.
+                if cfg["presence_display_control_enabled"] and not idle_lock_suppressed:
+                    prevent_system_idle_lock(True)
+                    idle_lock_suppressed = True
+                elif not cfg["presence_display_control_enabled"] and idle_lock_suppressed:
+                    prevent_system_idle_lock(False)
+                    idle_lock_suppressed = False
 
                 # Track the last real (non-overlay) foreground window every
                 # frame, so a grab always targets whatever app the user
@@ -448,6 +460,10 @@ class HandDraggerEngine:
                     time.sleep(0.001)
 
         finally:
+            if display_off:
+                set_monitor_power(True)  # don't leave the screen blank after tracking stops
+            if idle_lock_suppressed:
+                prevent_system_idle_lock(False)  # restore normal Windows idle/lock behavior
             cap.release()
             landmarker.close()
             self.running = False

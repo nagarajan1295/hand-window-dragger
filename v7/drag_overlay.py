@@ -18,9 +18,9 @@ Independent visual layers, combinable:
   window_manager.move_window_to_monitor); on drop, the visual grows into
   an outline at the real, final window rect ("reveal") so the transition
   doesn't look like a teleport.
-- HUD highlight -- corner-bracket outline (Iron Man HUD style) around
-  whichever window is topmost on the monitor the hand currently points
-  at, updated live as the hand crosses zones.
+- HUD highlight -- a solid outline framing whichever window is topmost
+  on the monitor the hand currently points at, updated live as the hand
+  crosses zones.
 - Name label -- the grabbed window's title, shown above the follow-visual.
 - Particle trail -- a short fading dot trail behind the follow-visual's
   motion.
@@ -39,6 +39,10 @@ _PW_RENDERFULLCONTENT = 2
 
 KEY_COLOR = "#ff00fe"
 KEY_COLOR_RGB = (255, 0, 254)
+
+# Shared warm accent (a muted clay/terracotta, not a bright cartoon
+# color) used as the default for the HUD highlight and reveal outline.
+THEME_COLOR = "#cc785c"
 
 
 def capture_window_thumbnail(hwnd):
@@ -123,9 +127,47 @@ def _ease_out_cubic(t):
     return 1 - (1 - t) ** 3
 
 
-_PORTAL_RING_COLORS = ["#5c3600", "#b36b00", "#ff9900", "#ffd24d"]
-_PORTAL_RING_MULTS = [1.0, 0.8, 0.6, 0.38]
-_PORTAL_ARC_COLOR = "#fff6cc"
+_PORTAL_SIZE = 132          # pixel diameter of the rendered portal image
+_PORTAL_FRAME_COUNT = 24    # pre-rendered rotation steps, cycled while shown
+_PORTAL_GLOW_DIM = (40, 22, 4)
+_PORTAL_GLOW_BRIGHT = (255, 178, 64)
+_PORTAL_GLOW_BANDS = 10
+
+
+def _make_portal_frame(size, angle):
+    """One frame of a swirling energy-portal disc at a given rotation
+    (degrees) -- perfectly circular, banded/stepped shading rather than
+    a blurred gradient (same color-key-safety reason as the crumpled-
+    paper mask and the greeting glow: Tk's -transparentcolor is a hard
+    binary key, and any softly blurred edge would flatten into a visible
+    fringe instead of disappearing)."""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    cx, cy = size / 2, size / 2
+    outer_r = size / 2 - 2
+
+    for i in range(_PORTAL_GLOW_BANDS, 0, -1):
+        t = i / _PORTAL_GLOW_BANDS
+        r = outer_r * (0.55 + 0.55 * t)
+        blend = 1.0 - t
+        color = tuple(int(_PORTAL_GLOW_DIM[c] + (_PORTAL_GLOW_BRIGHT[c] - _PORTAL_GLOW_DIM[c]) * blend)
+                      for c in range(3))
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(*color, 255))
+
+    ring_r = outer_r * 0.6
+    draw.ellipse([cx - ring_r, cy - ring_r, cx + ring_r, cy + ring_r],
+                 outline=(255, 224, 140, 255), width=max(2, size // 26))
+
+    void_r = ring_r * 0.86
+    draw.ellipse([cx - void_r, cy - void_r, cx + void_r, cy + void_r], fill=(18, 9, 2, 255))
+
+    for i in range(3):
+        a0 = angle + i * 120
+        streak_r = void_r * (0.5 + 0.22 * i)
+        draw.arc([cx - streak_r, cy - streak_r, cx + streak_r, cy + streak_r],
+                  start=a0, end=a0 + 65, fill=(255, 205, 110, 255), width=max(2, size // 32))
+
+    return img
 
 
 class DragOverlay:
@@ -155,10 +197,9 @@ class DragOverlay:
         self._rect_item = None       # reveal-animation outline
         self._image_item = None      # paper follow-visual
         self._photo = None
-        self._portal_items = None    # portal follow-visual (list of canvas items)
-        self._portal_center = None
-        self._portal_radius = 55
-        self._portal_phase = 0
+        self._portal_item = None     # portal follow-visual (single image, frame-cycled)
+        self._portal_frames = None
+        self._portal_frame_idx = 0
         self._portal_anim_token = None
         self._hud_items = None       # live target-window highlight (4 corner brackets)
         self._label_item = None
@@ -190,56 +231,37 @@ class DragOverlay:
 
     # ---------- follow-visual: portal ----------
 
-    def show_portal(self, center_x, center_y, radius=55):
-        self._portal_center = (center_x - self.origin_x, center_y - self.origin_y)
-        self._portal_radius = radius
-        if self._portal_items is None:
-            self._portal_items = []
-            for color in _PORTAL_RING_COLORS:
-                self._portal_items.append(self.canvas.create_oval(0, 0, 0, 0, fill=color, outline=""))
-            for _ in range(3):
-                self._portal_items.append(
-                    self.canvas.create_arc(0, 0, 0, 0, style="arc", outline=_PORTAL_ARC_COLOR, width=3)
-                )
+    def show_portal(self, center_x, center_y, size=_PORTAL_SIZE):
+        lx, ly = center_x - self.origin_x, center_y - self.origin_y
+        if self._portal_item is None:
+            self._portal_frames = []
+            for i in range(_PORTAL_FRAME_COUNT):
+                angle = i * (360 / _PORTAL_FRAME_COUNT)
+                flat = flatten_for_transparency(_make_portal_frame(size, angle))
+                self._portal_frames.append(ImageTk.PhotoImage(flat))
+            self._portal_frame_idx = 0
+            self._portal_item = self.canvas.create_image(lx, ly, image=self._portal_frames[0])
             self._portal_tick()
-        self._redraw_portal()
+        else:
+            self.canvas.coords(self._portal_item, lx, ly)
 
     def move_portal(self, center_x, center_y):
-        if self._portal_items is None:
+        if self._portal_item is None:
             return
-        self._portal_center = (center_x - self.origin_x, center_y - self.origin_y)
-        self._redraw_portal()
-
-    def _redraw_portal(self):
-        if self._portal_center is None or self._portal_items is None:
-            return
-        lx, ly = self._portal_center
-        r = self._portal_radius
-        for i, mult in enumerate(_PORTAL_RING_MULTS):
-            rr = r * mult
-            ry = rr * 0.42
-            self.canvas.coords(self._portal_items[i], lx - rr, ly - ry, lx + rr, ly + ry)
-        for j in range(3):
-            item = self._portal_items[4 + j]
-            rr = r * (0.5 + 0.18 * j)
-            ry = rr * 0.42
-            start = (self._portal_phase + j * 130) % 360
-            self.canvas.coords(item, lx - rr, ly - ry, lx + rr, ly + ry)
-            self.canvas.itemconfigure(item, start=start, extent=90)
+        self.canvas.coords(self._portal_item, center_x - self.origin_x, center_y - self.origin_y)
 
     def _portal_tick(self):
-        if self._portal_items is None:
+        if self._portal_item is None:
             return
-        self._portal_phase = (self._portal_phase + 8) % 360
-        self._redraw_portal()
-        self._portal_anim_token = self.root.after(45, self._portal_tick)
+        self._portal_frame_idx = (self._portal_frame_idx + 1) % len(self._portal_frames)
+        self.canvas.itemconfigure(self._portal_item, image=self._portal_frames[self._portal_frame_idx])
+        self._portal_anim_token = self.root.after(55, self._portal_tick)
 
     def _clear_portal(self):
-        if self._portal_items:
-            for item in self._portal_items:
-                self.canvas.delete(item)
-            self._portal_items = None
-        self._portal_center = None
+        if self._portal_item is not None:
+            self.canvas.delete(self._portal_item)
+            self._portal_item = None
+        self._portal_frames = None
         if self._portal_anim_token:
             try:
                 self.root.after_cancel(self._portal_anim_token)
@@ -256,25 +278,17 @@ class DragOverlay:
 
     # ---------- live HUD target-window highlight ----------
 
-    def show_hud_highlight(self, rect, color="#00e5ff", thickness=3, bracket_frac=0.16):
-        """Corner-bracket outline (Iron Man HUD style) around rect."""
+    def show_hud_highlight(self, rect, color=THEME_COLOR, thickness=6):
+        """Solid rectangle outline framing whichever window the hand is
+        currently pointing at -- a clearly visible full border, not thin
+        corner accents (those read as "just a line" at a glance)."""
         l, t, r, b = self._to_local(rect)
-        w, h = r - l, b - t
-        bl = max(10, min(abs(w), abs(h)) * bracket_frac)
-        corners = [
-            (l, t + bl, l, t, l + bl, t),
-            (r - bl, t, r, t, r, t + bl),
-            (r, b - bl, r, b, r - bl, b),
-            (l + bl, b, l, b, l, b - bl),
-        ]
         if self._hud_items is None:
-            self._hud_items = [
-                self.canvas.create_line(*pts, fill=color, width=thickness, capstyle="round") for pts in corners
-            ]
+            outer = self.canvas.create_rectangle(l, t, r, b, outline=color, width=thickness)
+            self._hud_items = [outer]
         else:
-            for item, pts in zip(self._hud_items, corners):
-                self.canvas.coords(item, *pts)
-                self.canvas.itemconfigure(item, fill=color)
+            self.canvas.coords(self._hud_items[0], l, t, r, b)
+            self.canvas.itemconfigure(self._hud_items[0], outline=color, width=thickness)
 
     def hide_hud_highlight(self):
         if self._hud_items:
@@ -331,7 +345,7 @@ class DragOverlay:
 
     # ---------- reveal animation (drop transition) ----------
 
-    def show_glow(self, rect, color="#00e5ff", thickness=5):
+    def show_glow(self, rect, color=THEME_COLOR, thickness=5):
         l, t, r, b = self._to_local(rect)
         if self._rect_item is None:
             self._rect_item = self.canvas.create_rectangle(l, t, r, b, outline=color, width=thickness)
@@ -339,7 +353,7 @@ class DragOverlay:
             self.canvas.coords(self._rect_item, l, t, r, b)
             self.canvas.itemconfigure(self._rect_item, outline=color, width=thickness)
 
-    def animate_reveal(self, start_rect, end_rect, color="#00e5ff", interval_ms=13,
+    def animate_reveal(self, start_rect, end_rect, color=THEME_COLOR, interval_ms=13,
                         min_steps=12, max_steps=36, on_done=None):
         """Grow an outline from start_rect to end_rect (absolute screen
         coordinates) -- the window "materializing" at the drop point --

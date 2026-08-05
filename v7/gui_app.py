@@ -32,7 +32,7 @@ from pattern_learning import generate_report
 from window_manager import get_topmost_window_on_monitor, virtual_desktop_bounds
 
 BALL_SIZE = 120
-PORTAL_RADIUS = 55
+PORTAL_SIZE = 132
 BALL_SMOOTHING_ALPHA = 0.35  # higher = snappier/more jittery, lower = smoother/more lag
 
 PREVIEW_W, PREVIEW_H = 640, 360
@@ -603,9 +603,9 @@ class App:
                 self._drag_last_ball_rect = (cx - BALL_SIZE / 2, cy - BALL_SIZE / 2,
                                               cx + BALL_SIZE / 2, cy + BALL_SIZE / 2)
         elif style == "portal":
-            self._drag_overlay.show_portal(cx, cy, radius=PORTAL_RADIUS)
-            self._drag_last_ball_rect = (cx - PORTAL_RADIUS, cy - PORTAL_RADIUS * 0.42,
-                                          cx + PORTAL_RADIUS, cy + PORTAL_RADIUS * 0.42)
+            self._drag_overlay.show_portal(cx, cy, size=PORTAL_SIZE)
+            half = PORTAL_SIZE / 2
+            self._drag_last_ball_rect = (cx - half, cy - half, cx + half, cy + half)
         else:
             self._drag_last_ball_rect = self._drag_source_rect
 
@@ -675,13 +675,13 @@ class App:
             self._drag_last_ball_rect = (sx - half, sy - half, sx + half, sy + half)
         elif style == "portal":
             self._drag_overlay.move_portal(sx, sy)
-            self._drag_last_ball_rect = (sx - PORTAL_RADIUS, sy - PORTAL_RADIUS * 0.42,
-                                          sx + PORTAL_RADIUS, sy + PORTAL_RADIUS * 0.42)
+            half = PORTAL_SIZE / 2
+            self._drag_last_ball_rect = (sx - half, sy - half, sx + half, sy + half)
 
         if self.cfg["show_name_label"]:
             self._drag_overlay.show_label(info["grabbed_title"] or "", sx, sy)
         if self.cfg["particle_trail_enabled"]:
-            trail_color = {"paper": "#d8c48a", "portal": "#ffd24d"}.get(style, "#66d9ff")
+            trail_color = {"paper": "#d8c48a", "portal": "#ffd24d"}.get(style, "#cc785c")
             self._drag_overlay.update_trail(sx, sy, color=trail_color)
 
     def _update_target_highlight(self, info):
@@ -700,7 +700,7 @@ class App:
             self._highlight_hwnd = get_topmost_window_on_monitor(monitor, exclude_pid=os.getpid())
         if self._highlight_hwnd and win32gui.IsWindow(self._highlight_hwnd):
             rect = win32gui.GetWindowRect(self._highlight_hwnd)
-            self._drag_overlay.show_hud_highlight(rect, color="#00e5ff")
+            self._drag_overlay.show_hud_highlight(rect)  # uses drag_overlay's THEME_COLOR default
         else:
             self._drag_overlay.hide_hud_highlight()
 

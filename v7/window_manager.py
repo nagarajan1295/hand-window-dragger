@@ -1,9 +1,40 @@
 """Monitor enumeration and window move/maximize helpers (Win32)."""
 
+import ctypes
+
 import win32api
 import win32con
 import win32gui
 import win32process
+
+_ES_CONTINUOUS = 0x80000000
+_ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def prevent_system_idle_lock(prevent):
+    """Stop Windows' own inactivity timer from sleeping/locking the
+    session while we're managing presence-based display power ourselves.
+
+    Without this, Windows' own idle timeout can independently trigger
+    "require sign-in" on the next screen wake -- including the wake WE
+    cause by calling set_monitor_power(True) -- so the user comes back,
+    the display turns on, and they're staring at the Windows lock screen
+    instead of their desktop. Worse, while the session is locked, Windows
+    blocks camera access for background apps, so the face-detection loop
+    that's supposed to notice they're back never gets a frame, and
+    set_monitor_power(True) never even fires -- it looks like the
+    feature just doesn't work.
+
+    Deliberately does NOT pass ES_DISPLAY_REQUIRED: that would force the
+    display to always stay on and defeat the point. This only tells
+    Windows "don't treat this as system-idle," so its own separate
+    sleep/lock timer never fires; set_monitor_power() remains the only
+    thing that blanks the screen. Reversible, no admin rights, no system
+    settings touched -- must be called with prevent=False when this
+    feature is disabled or the engine stops, to restore normal behavior.
+    """
+    flags = _ES_CONTINUOUS | _ES_SYSTEM_REQUIRED if prevent else _ES_CONTINUOUS
+    ctypes.windll.kernel32.SetThreadExecutionState(flags)
 
 
 def set_monitor_power(on):
