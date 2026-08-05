@@ -32,6 +32,7 @@ from window_manager import (
     move_window_to_monitor,
     prevent_system_idle_lock,
     set_monitor_power,
+    simulate_trivial_input,
 )
 from zone_calibration import USAGE_LEARNING_RATE, load_profile, save_profile, update_center, zone_for_x
 
@@ -178,6 +179,7 @@ class HandDraggerEngine:
         greeting_pending = False
         greeting_name = None
         idle_lock_suppressed = False
+        last_input_sim_ts = 0.0
 
         self._log(f"Started. {len(self.monitors)} monitor(s) detected.")
 
@@ -263,6 +265,19 @@ class HandDraggerEngine:
                 elif not cfg["presence_display_control_enabled"] and idle_lock_suppressed:
                     prevent_system_idle_lock(False)
                     idle_lock_suppressed = False
+
+                # The screensaver's own idle timer (and any OS-level
+                # inactivity-lock policy) is driven by real keyboard/mouse
+                # input, not by the power-idle state prevent_system_idle_lock
+                # suppresses above -- so while we've deliberately blanked the
+                # display because no one is present, also nudge that timer
+                # every ~20s so a "require sign-in" screensaver doesn't lock
+                # the session out from under the display-off feature.
+                if display_off:
+                    now_sim = time.time()
+                    if now_sim - last_input_sim_ts > 20:
+                        simulate_trivial_input()
+                        last_input_sim_ts = now_sim
 
                 # Track the last real (non-overlay) foreground window every
                 # frame, so a grab always targets whatever app the user

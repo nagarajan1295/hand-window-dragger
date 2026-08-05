@@ -37,6 +37,22 @@ def prevent_system_idle_lock(prevent):
     ctypes.windll.kernel32.SetThreadExecutionState(flags)
 
 
+def simulate_trivial_input():
+    """Nudge Windows' input-idle timer without visibly moving the mouse.
+
+    prevent_system_idle_lock() above only stops the power-management idle
+    timer. It has no effect on the screensaver's own idle timer (or a
+    "machine inactivity limit" policy, if one is configured) -- those are
+    driven by real keyboard/mouse activity via GetLastInputInfo, a
+    completely separate mechanism. If the screensaver is set to "on
+    resume, display logon screen" (the Windows default), it will still
+    lock the session on its own schedule even while system-idle is
+    suppressed. A zero-delta relative mouse move registers as input and
+    resets that timer without actually moving the cursor.
+    """
+    win32api.mouse_event(win32con.MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+
+
 def set_monitor_power(on):
     """Turn the display(s) on or off -- not lock, not system sleep -- via
     the standard WM_SYSCOMMAND/SC_MONITORPOWER broadcast. The camera and
