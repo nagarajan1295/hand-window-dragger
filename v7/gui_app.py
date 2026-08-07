@@ -62,6 +62,7 @@ class App:
         self._last_highlight_zone = None
         self._highlight_hwnd = None
         self._blackout_win = None
+        self._blackout_dismissed = False
 
         self.engine = HandDraggerEngine(config=self.cfg, on_frame=self._on_frame, on_event=self._on_event)
 
@@ -529,6 +530,7 @@ class App:
             self.status_var.set("Stopped")
             self.hold_var.set("")
             self._hide_blackout()  # never leave the screen stuck black after tracking stops
+            self._blackout_dismissed = False
 
         try:
             while True:
@@ -537,10 +539,13 @@ class App:
                 self.status_var.set(info["state"])
                 self.hold_var.set(f"Holding: {info['grabbed_title']}" if info["grabbed_title"] else "")
                 self._update_drag_overlay(info)
-                if info.get("display_off") and self._blackout_win is None:
-                    self._show_blackout()
-                elif not info.get("display_off") and self._blackout_win is not None:
-                    self._hide_blackout()
+                if info.get("display_off"):
+                    if self._blackout_win is None and not self._blackout_dismissed:
+                        self._show_blackout()
+                else:
+                    if self._blackout_win is not None:
+                        self._hide_blackout()
+                    self._blackout_dismissed = False
                 if info.get("greeting_pending") and info.get("greeting_name"):
                     self._show_greeting(info["greeting_name"])
         except queue.Empty:
@@ -592,6 +597,8 @@ class App:
         win.attributes("-topmost", True)
         win.configure(bg="black")
         win.geometry(f"{w}x{h}+{int(x)}+{int(y)}")
+        win.bind("<Escape>", self._dismiss_blackout)
+        win.focus_force()  # so the Escape binding actually receives the keypress
         self._blackout_win = win
 
     def _hide_blackout(self):
@@ -601,6 +608,15 @@ class App:
             except tk.TclError:
                 pass
             self._blackout_win = None
+
+    def _dismiss_blackout(self, _event=None):
+        """Escape while the screen is blanked: restore it immediately,
+        without waiting for face detection. Sets a flag so _poll doesn't
+        just black it out again on the next frame -- it stays dismissed
+        until presence actually returns (engine reports display_off ==
+        False) and a fresh away cycle starts."""
+        self._blackout_dismissed = True
+        self._hide_blackout()
 
     def _any_animation_active(self):
         return (self.cfg["follow_style"] != "none" or self.cfg["highlight_target_enabled"]
