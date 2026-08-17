@@ -76,6 +76,7 @@ class App:
 
     def _build_ui(self):
         self.root.rowconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=0)
         self.root.columnconfigure(0, weight=1)
 
         container = ttk.Frame(self.root, padding=10)
@@ -265,6 +266,17 @@ class App:
 
         ttk.Separator(main, orient="horizontal").grid(row=r, column=col, sticky="ew", pady=6); r += 1
         ttk.Button(main, text="Quit", command=self.quit_app).grid(row=r, column=col, sticky="ew"); r += 1
+
+        # Pinned outside the scrollable settings pane, row 1 of root, so
+        # it's always visible regardless of scroll position.
+        footer = ttk.Frame(self.root, padding=(10, 0, 10, 6))
+        footer.grid(row=1, column=0, sticky="ew")
+        ttk.Label(
+            footer,
+            text="Made by Naga · built entirely during \"work hours,\" a triumph of "
+                 "productive procrastination.",
+            font=("Segoe UI", 8, "italic"), foreground="#888888", anchor="center", justify="center",
+        ).pack(fill="x")
 
     def _add_slider(self, parent, r, col, label_text, key, lo, hi):
         label = ttk.Label(parent, text=f"{label_text}: {self.cfg[key]}")
