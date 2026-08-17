@@ -8,4 +8,5 @@ face_data/
 usage_history.jsonl
 pattern_model.joblib
 usage_report.html
+greeting_assets/
 *.log
