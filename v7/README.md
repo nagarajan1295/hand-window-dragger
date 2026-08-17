@@ -4,6 +4,13 @@ Iron-Man-style window control: grab the focused window with a fist gesture
 in front of your webcam, move your hand across the frame, open your hand
 to drop the window onto the corresponding monitor.
 
+## Just want to try it?
+
+Download the standalone Windows build from the
+[Releases page](../../releases) -- no Python, no `pip install`, just
+unzip and run `HandWindowDragger_v7.exe`. Everything below is for
+running from source / hacking on it instead.
+
 Everything in [v6](../v6) (calibration tutorial, zone-based grabbing,
 face-recognition security, custom gestures including keyboard/mouse
 actions, portal/paper drag animations with HUD highlighting), plus:
@@ -35,20 +42,29 @@ with `python main.py`.
 
 Settings -> **Presence** section. **"Turn display off when I leave, on
 when I return"** watches for your enrolled face; after it hasn't seen
-you for the configured **away threshold** (default 20s), it turns the
-monitor(s) off -- not lock, not system sleep, just display power, via
-the standard `WM_SYSCOMMAND`/`SC_MONITORPOWER` call. The camera and app
-keep running underneath the whole time, so it notices the moment you're
-back and turns the display on again. Requires at least one enrolled
-face (the toggle refuses to turn on otherwise -- without a recognized
-identity to watch for, the display would turn off once and never find a
-reason to turn back on).
+you for the configured **away threshold** (default 20s), it blanks the
+screen with a plain black window covering every monitor -- not lock,
+not system sleep, and deliberately *not* a real monitor power-off
+either: an earlier version used the actual `SC_MONITORPOWER` call, but
+changing real display power state is itself what makes Windows apply
+its "require sign-in" lock policy the instant it happens, independent
+of any idle timer. A software blackout never touches real display
+power, so that policy never fires. The camera and app keep running
+underneath the whole time, so it notices the moment you're back and
+clears the blackout. Press **Escape** any time to dismiss it early
+without waiting on face detection. Requires at least one enrolled face
+(the toggle refuses to turn on otherwise -- without a recognized
+identity to watch for, the screen would blank once and never find a
+reason to clear).
 
-**"Show a greeting when the display turns back on"** shows a big
-JARVIS-HUD-style "HI \<YOUR NAME\>" in cyan, holds briefly, then fades
-out over a couple seconds (`greeting.py`) -- only fires alongside the
-display turning back on from a recognized face, not on every random
-face-detection blip.
+**"Show a greeting when the display turns back on"** shows a greeting
+overlay, holds briefly, then fades out (`greeting.py`) -- only fires
+alongside the display turning back on from a recognized face, not on
+every random face-detection blip. Fully customizable via **"Customize
+Greeting..."**: your own text (`{name}` is an optional placeholder),
+font, text/background colors, background shape (glow orb, rounded
+rectangle, plain rectangle, or none), or swap in your own image instead
+of text entirely -- with a live preview before saving.
 
 Note: like every other feature here, this only runs while **Start
 Tracking** is active -- it's part of the same camera loop, not a
@@ -111,15 +127,15 @@ paper/portal drag animations with live HUD target highlighting.
   pattern-learning hooks on every grab/drop.
 - `pattern_learning.py` -- usage logging, the incremental neural network,
   and HTML report generation.
-- `greeting.py` -- the JARVIS-style fade-in/out HUD greeting overlay.
+- `greeting.py` / `greeting_ui.py` -- the fade-in/out greeting overlay
+  and its settings dialog (custom text/font/colors/shape or a
+  user-supplied image, with a live preview).
 - `face_auth.py` -- face enrollment/recognition; `recognize()` now also
   returns the detected face's bounding box (used by presence detection
   and hand-near-face suppression, not just identity).
 - `window_manager.py` -- monitor enumeration, window placement/z-order,
-  reliable foreground-stealing, topmost-window lookup, and
-  `set_monitor_power()` (bounded-timeout `SendMessageTimeout`, since a
-  plain broadcast `SendMessage` can hang indefinitely on an unresponsive
-  window).
+  reliable foreground-stealing, topmost-window lookup, and the
+  idle-lock-suppression helpers used while the presence blackout is up.
 - `drag_overlay.py` -- animation system (paper/portal follow-visuals,
   HUD highlight, name label, particle trail).
 - `zone_calibration.py` -- learned per-user hand-to-monitor mapping.
