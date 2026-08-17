@@ -1,6 +1,6 @@
 # Hand Window Dragger
 
-Iron-Man-style window control: grab the focused window with a fist
+JARVIS inspired window control: grab the focused window with a fist
 gesture in front of your webcam, move your hand across the frame, open
 your hand to drop the window onto the corresponding monitor. Built on
 [MediaPipe HandLandmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker)
